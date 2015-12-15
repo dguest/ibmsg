@@ -49,10 +49,10 @@ typedef struct
     } status;
 } ibmsg_buffer;
 
-struct _ibmsg_event_description 
+struct _ibmsg_event_description
 {
     /* used internally */
-    enum { 
+    enum {
         IBMSG_CMA, IBMSG_SEND_COMPLETION, IBMSG_RECV_COMPLETION
     } type;
     void* ptr;

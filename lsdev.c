@@ -20,7 +20,7 @@ main(int argc, char** argv)
 	for(i=0; i<num_devices; i++)
 	{
 		uint64_t guid = ibv_get_device_guid(devices[i]);
-		printf("%s \t%s \t%s \t%s \t0x%lx\n", 
+		printf("%s \t%s \t%s \t%s \t0x%lx\n",
 		       devices[i]->name,
 		       devices[i]->dev_name,
 		       devices[i]->dev_path,

@@ -51,23 +51,23 @@ ibmsg_destroy_event_loop(ibmsg_event_loop* event_loop)
 int
 ibmsg_connect(ibmsg_event_loop* event_loop, ibmsg_socket* connection, char* ip, unsigned short port)
 {
-    struct rdma_addrinfo* address_results;                                                                                                                         
-    struct sockaddr_in dst_addr;                                                                                                                                   
+    struct rdma_addrinfo* address_results;
+    struct sockaddr_in dst_addr;
     char service[16];
     snprintf(service, 16, "%d", port);
 
     connection->status = IBMSG_UNCONNECTED;
     connection->socket_type = IBMSG_SEND_SOCKET;
 
-    memset(&dst_addr, 0, sizeof dst_addr);                                                                                                                         
-    dst_addr.sin_family = AF_INET;                                                                                                                                 
+    memset(&dst_addr, 0, sizeof dst_addr);
+    dst_addr.sin_family = AF_INET;
     dst_addr.sin_port = htons(atoi(service));
     inet_pton(AF_INET, ip, &dst_addr.sin_addr);
 
     CHECK_CALL( rdma_getaddrinfo(ip, service, NULL, &address_results), IBMSG_GETADDRINFO_FAILED );
     CHECK_CALL( rdma_create_id (event_loop->event_channel, &connection->cmid, connection, RDMA_PS_TCP), IBMSG_CREATE_ID_FAILED );
     CHECK_CALL( rdma_resolve_addr (connection->cmid, NULL, (struct sockaddr*)&dst_addr, IBMSG_TIMEOUT_MS), IBMSG_ADDRESS_RESOLUTION_FAILED );
-     
+
     return IBMSG_OK;
 }
 
