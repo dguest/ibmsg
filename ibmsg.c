@@ -56,6 +56,8 @@ ibmsg_connect(ibmsg_event_loop* event_loop, ibmsg_socket* connection, char* ip, 
     char service[16];
     snprintf(service, 16, "%d", port);
 
+    connection->credit = IBMSG_MAX_CREDIT;
+
     connection->status = IBMSG_UNCONNECTED;
     connection->socket_type = IBMSG_SEND_SOCKET;
 
@@ -114,7 +116,19 @@ ibmsg_free_msg(ibmsg_buffer* msg)
 int
 ibmsg_post_send(ibmsg_socket* connection, ibmsg_buffer* msg)
 {
+    if (connection->credit < 1) {
+        LOG("insufficient credit to send message");
+        return IBMSG_INSUFFICIENT_CREDIT;
+    }
+    // CREDIT: post receve for the credit count
+    ibmsg_buffer* recv_msg = &connection->recv_buffer;
+    CHECK_CALL( rdma_post_recv(connection->cmid, recv_msg, NULL, 0, NULL),
+                IBMSG_POST_SEND_FAILED );
+
     CHECK_CALL( rdma_post_send(connection->cmid, msg /* wrid */, msg->data, msg->size, msg->mr, 0), IBMSG_POST_SEND_FAILED );
+
+    // CREDIT: decrement the credit count
+    connection->credit--;
     return IBMSG_OK;
 }
 

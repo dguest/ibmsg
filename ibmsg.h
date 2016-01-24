@@ -4,7 +4,7 @@
 #include <rdma/rdma_cma.h>
 
 #define IBMSG_MAX_MSGSIZE       (4096)
-
+#define IBMSG_MAX_CREDIT        (10)
 
 enum
 {
@@ -26,7 +26,11 @@ enum
     IBMSG_ACCEPT_FAILED,
     IBMSG_EPOLL_FAILED,
     IBMSG_EPOLL_ADD_FD_FAILED,
-    IBMSG_EPOLL_WAIT_FAILED
+    IBMSG_EPOLL_WAIT_FAILED,
+
+    // CREDIT: added this return code for unsuccessful sends
+    IBMSG_INSUFFICIENT_CREDIT,
+    IBMSG_INCREMENT_CREDIT_FAILED
 };
 
 
@@ -51,6 +55,7 @@ typedef struct
 
 struct _ibmsg_event_description
 {
+  // CREDIT: do we need to add types here?
     /* used internally */
     enum {
         IBMSG_CMA, IBMSG_SEND_COMPLETION, IBMSG_RECV_COMPLETION
@@ -78,6 +83,9 @@ typedef struct
 
     struct _ibmsg_event_description send_event_description;
     struct _ibmsg_event_description recv_event_description;
+
+    // CREDIT: need to make this value atomic
+    int credit;
 } ibmsg_socket;
 
 typedef struct
@@ -104,5 +112,8 @@ int ibmsg_alloc_msg(ibmsg_buffer* msg, ibmsg_socket* connection, size_t size);
 int ibmsg_free_msg(ibmsg_buffer* msg);
 int ibmsg_post_send(ibmsg_socket* connection, ibmsg_buffer* msg);
 int ibmsg_dispatch_event_loop(ibmsg_event_loop* event_loop);
+
+// CREDIT: add a function to confirm that a recev buffer has been dealt with
+int ibmsg_increment_credit(ibmsg_socket* connection);
 
 #endif
