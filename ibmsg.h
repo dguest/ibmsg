@@ -80,6 +80,8 @@ typedef struct
         IBMSG_SEND_SOCKET
     } socket_type;
     ibmsg_buffer recv_buffer;
+    // CREDIT: TODO, make the flow control use this buffer
+    ibmsg_buffer flow_control_buffer;
 
     struct _ibmsg_event_description send_event_description;
     struct _ibmsg_event_description recv_event_description;

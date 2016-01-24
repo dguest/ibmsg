@@ -73,6 +73,7 @@ main(int argc, char** argv)
 	/* Event loop */
 	while(1)
 	{
+    printf("receve credit: %d\n", socket.credit);
 		if(ibmsg_dispatch_event_loop(&event_loop))
 		{
 			fprintf(stderr, APPLICATION_NAME": error: something went wrong while working in the event loop\n");

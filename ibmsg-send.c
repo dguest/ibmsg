@@ -62,6 +62,7 @@ main(int argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 
+  /* printf("msg mr 0x%llx\n", (unsigned long long)msg.mr); */
 	while(msg.status != IBMSG_SENT)
 		if(ibmsg_dispatch_event_loop(&event_loop))
 		{

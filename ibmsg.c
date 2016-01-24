@@ -90,6 +90,7 @@ ibmsg_alloc_msg(ibmsg_buffer* msg, ibmsg_socket* connection, size_t size)
         return IBMSG_ALLOC_FAILED;
     msg->status = IBMSG_WAITING;
     msg->data = buffer;
+    LOG("allocated msg 0x%llx", (unsigned long long)msg->data);
     msg->size = size;
     msg->mr = rdma_reg_msgs(connection->cmid, buffer, size);
     if(!msg->mr)
@@ -108,6 +109,7 @@ ibmsg_free_msg(ibmsg_buffer* msg)
     int result = IBMSG_OK;
     if(rdma_dereg_mr(msg->mr))
         result = IBMSG_MEMORY_REGISTRATION_FAILED;
+    LOG("freeing msg 0x%llx", (unsigned long long)msg->data);
     free(msg->data);
     return result;
 }
@@ -122,13 +124,21 @@ ibmsg_post_send(ibmsg_socket* connection, ibmsg_buffer* msg)
     }
     // CREDIT: post receve for the credit count
     ibmsg_buffer* recv_msg = &connection->recv_buffer;
-    CHECK_CALL( rdma_post_recv(connection->cmid, recv_msg, NULL, 0, NULL),
-                IBMSG_POST_SEND_FAILED );
+    if(ibmsg_alloc_msg(recv_msg, connection, sizeof(int)) != IBMSG_OK)
+    {
+        LOG("could not allocate memory for credit update");
+        connection->status = IBMSG_ERROR;
+    }
+    CHECK_CALL(
+      rdma_post_recv(connection->cmid, recv_msg, recv_msg->data, sizeof(int),
+                     recv_msg->mr),
+      IBMSG_POST_SEND_FAILED );
 
     CHECK_CALL( rdma_post_send(connection->cmid, msg /* wrid */, msg->data, msg->size, msg->mr, 0), IBMSG_POST_SEND_FAILED );
 
     // CREDIT: decrement the credit count
     connection->credit--;
+    LOG("send credit lowered to %d", connection->credit);
     return IBMSG_OK;
 }
 
@@ -147,6 +157,9 @@ ibmsg_listen(ibmsg_event_loop* event_loop, ibmsg_socket* socket, char* ip, short
     CHECK_CALL( rdma_create_id (event_loop->event_channel, &socket->cmid, NULL, RDMA_PS_TCP), IBMSG_CREATE_ID_FAILED );
     CHECK_CALL( rdma_bind_addr (socket->cmid, (struct sockaddr*)&src_addr), IBMSG_BIND_FAILED );
     CHECK_CALL( rdma_listen (socket->cmid, max_connections), IBMSG_LISTEN_FAILED );
+
+    //CREDIT: set the credit to the hardcoded maximum
+    socket->credit = IBMSG_MAX_CREDIT;
 
     return IBMSG_OK;
 }
