@@ -98,6 +98,7 @@ ibmsg_alloc_msg(ibmsg_buffer* msg, ibmsg_socket* connection, size_t size)
         free(buffer);
         return IBMSG_MEMORY_REGISTRATION_FAILED;
     }
+    LOG("alloc buffer 0x%llx size %llu", msg->data, msg->size);
     return IBMSG_OK;
 }
 
@@ -109,6 +110,7 @@ ibmsg_free_msg(ibmsg_buffer* msg)
     if(rdma_dereg_mr(msg->mr))
         result = IBMSG_MEMORY_REGISTRATION_FAILED;
     free(msg->data);
+    LOG("free buffer 0x%llx size %llu", msg->data, msg->size);
     return result;
 }
 
@@ -123,6 +125,10 @@ ibmsg_post_send(ibmsg_socket* connection, ibmsg_buffer* msg)
 
     // post receve for the credit
     ibmsg_buffer* recv_msg = &connection->flow_control_buffer;
+    // decrement the credit count
+    // TODO: make this operation atomic
+    connection->credit--;
+    LOG("send credit lowered to %d", connection->credit);
     if(ibmsg_alloc_msg(recv_msg, connection, sizeof(int)) != IBMSG_OK)
     {
         LOG("could not allocate memory for credit update");
@@ -135,10 +141,6 @@ ibmsg_post_send(ibmsg_socket* connection, ibmsg_buffer* msg)
 
     CHECK_CALL( rdma_post_send(connection->cmid, msg /* wrid */, msg->data, msg->size, msg->mr, 0), IBMSG_POST_SEND_FAILED );
 
-    // decrement the credit count
-    // TODO: make this operation atomic
-    connection->credit--;
-    LOG("send credit lowered to %d", connection->credit);
     return IBMSG_OK;
 }
 
@@ -180,7 +182,7 @@ ibmsg_accept(ibmsg_connection_request* request, ibmsg_socket* connection)
     connection->socket_type = IBMSG_RECV_SOCKET;
 
     //TODO: Send this credit count to the other side.
-    connection->credit = IBMSG_MAX_CREDIT;
+    connection->credit = 2*IBMSG_MAX_CREDIT;
 
     return IBMSG_OK;
 }

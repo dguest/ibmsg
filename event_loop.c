@@ -158,7 +158,10 @@ process_rdma_event(ibmsg_event_loop* event_loop, struct rdma_cm_event* event)
                 connection->status = IBMSG_ERROR;
                 free_connection(connection);
             }
-            post_receive(connection);
+            if (connection->socket_type == IBMSG_RECV_SOCKET)
+            {
+                post_receive(connection);
+            }
             rdma_ack_cm_event (event);
             connection->status = IBMSG_CONNECTED;
             if(event_loop->connection_established)
@@ -214,7 +217,9 @@ process_recv_socket_send_completion(ibmsg_socket* connection)
     ibmsg_buffer* msg = (ibmsg_buffer*) wc.wr_id;
     LOG( "%d send completion(s) found", n_completions);
     LOG( "SEND complete: WRID 0x%llx", (long long unsigned)wc.wr_id );
-    ibmsg_free_msg(msg);
+
+    // unregister the region
+    if(rdma_dereg_mr(msg->mr)) return IBMSG_MEMORY_REGISTRATION_FAILED;
     return 0;
 }
 
@@ -248,7 +253,7 @@ process_recv_socket_recv_completion(ibmsg_event_loop* event_loop,
         if(ibmsg_free_msg(msg))
             return IBMSG_FREE_BUFFER_FAILED;
 
-        ibmsg_post_increment_credit(connection);
+        ibmsg_post_credit(connection);
     }
     if(connection->status == IBMSG_CONNECTED)
         post_receive(connection);
@@ -266,12 +271,14 @@ process_send_socket_recv_completion(ibmsg_socket* connection)
             errno, strerror(errno));
         return IBMSG_FETCH_EVENT_FAILED;
     }
-
-    ibmsg_free_msg(&connection->flow_control_buffer);
-    connection->credit++;
-    LOG("send credit raised to %d", connection->credit);
-
+    LOG( "%d recv completion(s) found", n_completions);
+    LOG("send credit was %d", connection->credit);
     ibmsg_buffer* msg = (ibmsg_buffer*) (wc.wr_id);
+    LOG("read buffer 0x%llx size %llu", msg->data, msg->size);
+    connection->credit = *(int*)msg->data;
+    ibmsg_free_msg(msg);
+    LOG("send credit is now %d", connection->credit);
+
     msg->status = IBMSG_RECEIVED;
     LOG( "%d recv completion(s) found", n_completions);
     LOG( "RECV complete: WRID 0x%llx", (long long unsigned)msg );
@@ -340,19 +347,29 @@ ibmsg_dispatch_event_loop(ibmsg_event_loop* event_loop)
     return IBMSG_OK;
 }
 
-int ibmsg_post_increment_credit(ibmsg_socket* connection)
+int ibmsg_post_credit(ibmsg_socket* connection)
 {
-    ibmsg_buffer* flow_ctl_msg = &connection->flow_control_buffer;
-    if(ibmsg_alloc_msg(flow_ctl_msg, connection, sizeof(int)) != IBMSG_OK)
-    {
-       LOG("could not allocate memory for credit update");
-       connection->status = IBMSG_ERROR;
-    }
-    CHECK_CALL( rdma_post_send(
-                    connection->cmid, flow_ctl_msg, flow_ctl_msg->data,
-                    sizeof(int), flow_ctl_msg->mr, 0),
-                IBMSG_INCREMENT_CREDIT_FAILED);
+    ibmsg_buffer* msg = &connection->flow_control_buffer;
+    // TODO: calculate the credit from the receve buffers
     connection->credit++;
-    LOG("recv credit incremented to %d", connection->credit++);
+
+    // format flow control message
+    msg->status = IBMSG_WAITING;
+    msg->data = &connection->credit;
+    msg->size = sizeof(connection->credit);
+    msg->mr = rdma_reg_msgs(connection->cmid, msg->data, msg->size);
+    if(!msg->mr)
+    {
+        LOG("Could not allocate message: %s", strerror(errno));
+        return IBMSG_MEMORY_REGISTRATION_FAILED;
+    }
+    LOG("registered message %i, size = %llu", *(int*)msg->data, msg->size);
+
+    // post credit
+    CHECK_CALL( rdma_post_send(
+                    connection->cmid, msg, msg->data,
+                    msg->size, msg->mr, 0),
+                IBMSG_INCREMENT_CREDIT_FAILED);
+    LOG("recv credit incremented to %d", connection->credit);
     return IBMSG_OK;
 }

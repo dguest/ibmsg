@@ -27,7 +27,7 @@ message_received(ibmsg_socket* connection, ibmsg_buffer* msg)
 	printf("message received\n");
 	ibmsg_free_msg(msg);
 
-  ibmsg_post_increment_credit(connection);
+  ibmsg_post_credit(connection);
 }
 
 
@@ -91,5 +91,5 @@ main(int argc, char** argv)
 		fprintf(stderr, APPLICATION_NAME": error: could not destroy event loop\n");
 	}
 
-    return EXIT_SUCCESS;
+  return EXIT_SUCCESS;
 }

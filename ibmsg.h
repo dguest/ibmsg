@@ -115,6 +115,6 @@ int ibmsg_post_send(ibmsg_socket* connection, ibmsg_buffer* msg);
 int ibmsg_dispatch_event_loop(ibmsg_event_loop* event_loop);
 
 // Confirm that the buffer is free and ready to receve more messages
-int ibmsg_post_increment_credit(ibmsg_socket* connection);
+int ibmsg_post_credit(ibmsg_socket* connection);
 
 #endif
