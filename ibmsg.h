@@ -55,7 +55,6 @@ typedef struct
 
 struct _ibmsg_event_description
 {
-  // CREDIT: do we need to add types here?
     /* used internally */
     enum {
         IBMSG_CMA, IBMSG_SEND_COMPLETION, IBMSG_RECV_COMPLETION
@@ -79,14 +78,14 @@ typedef struct
         IBMSG_RECV_SOCKET,
         IBMSG_SEND_SOCKET
     } socket_type;
+    // TODO: replace the single recev buffer with an array of buffers
     ibmsg_buffer recv_buffer;
-    // CREDIT: TODO, make the flow control use this buffer
     ibmsg_buffer flow_control_buffer;
 
     struct _ibmsg_event_description send_event_description;
     struct _ibmsg_event_description recv_event_description;
 
-    // CREDIT: need to make this value atomic
+    // TODO: make this value atomic
     int credit;
 } ibmsg_socket;
 
@@ -115,7 +114,7 @@ int ibmsg_free_msg(ibmsg_buffer* msg);
 int ibmsg_post_send(ibmsg_socket* connection, ibmsg_buffer* msg);
 int ibmsg_dispatch_event_loop(ibmsg_event_loop* event_loop);
 
-// CREDIT: add a function to confirm that a recev buffer has been dealt with
-int ibmsg_increment_credit(ibmsg_socket* connection);
+// Confirm that the buffer is free and ready to receve more messages
+int ibmsg_post_increment_credit(ibmsg_socket* connection);
 
 #endif

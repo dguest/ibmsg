@@ -144,7 +144,7 @@ process_rdma_event(ibmsg_event_loop* event_loop, struct rdma_cm_event* event)
             if(request.status != IBMSG_ACCEPTED)
             {
                 LOG("connection request rejected");
-                rdma_reject(event->id, NULL, 0);                    
+                rdma_reject(event->id, NULL, 0);
             }
             else
             {
@@ -181,12 +181,10 @@ process_rdma_event(ibmsg_event_loop* event_loop, struct rdma_cm_event* event)
     }
 }
 
-/* add two more cases here, for send receve completion etc */
 static int
 process_send_socket_send_completion(ibmsg_socket* connection)
 {
     struct ibv_wc wc;
-    LOG("send connection cmid: 0x%llx", (long long unsigned)connection->cmid);
     int n_completions = rdma_get_send_comp(connection->cmid, &wc);
     if(n_completions == -1)
     {
@@ -205,7 +203,6 @@ static int
 process_recv_socket_send_completion(ibmsg_socket* connection)
 {
     struct ibv_wc wc;
-    LOG("send connection cmid: 0x%llx", (long long unsigned)connection->cmid);
     int n_completions = rdma_get_send_comp(connection->cmid, &wc);
     if(n_completions == -1)
     {
@@ -215,18 +212,19 @@ process_recv_socket_send_completion(ibmsg_socket* connection)
     }
 
     ibmsg_buffer* msg = (ibmsg_buffer*) wc.wr_id;
-    msg->status = IBMSG_SENT;
     LOG( "%d send completion(s) found", n_completions);
     LOG( "SEND complete: WRID 0x%llx", (long long unsigned)wc.wr_id );
+    ibmsg_free_msg(msg);
     return 0;
 }
 
-
+// TODO: the socket should manage an array of buffers, not just a
+//       single buffer with a credit counter.
 static int
-process_recv_socket_recv_completion(ibmsg_event_loop* event_loop, ibmsg_socket* connection)
+process_recv_socket_recv_completion(ibmsg_event_loop* event_loop,
+                                    ibmsg_socket* connection)
 {
     struct ibv_wc wc;
-    LOG("recv connection cmid: 0x%llx", (long long unsigned)connection->cmid);
     int n_completions = rdma_get_recv_comp(connection->cmid, &wc);
     if(n_completions == -1)
     {
@@ -234,7 +232,6 @@ process_recv_socket_recv_completion(ibmsg_event_loop* event_loop, ibmsg_socket* 
         return IBMSG_FETCH_EVENT_FAILED;
     }
 
-    // CREDIT: decrement credit on receve end
     connection->credit--;
     LOG("receve credit lowered to %d", connection->credit);
 
@@ -251,8 +248,7 @@ process_recv_socket_recv_completion(ibmsg_event_loop* event_loop, ibmsg_socket* 
         if(ibmsg_free_msg(msg))
             return IBMSG_FREE_BUFFER_FAILED;
 
-        // CREDIT: increment credit again (now that buffer is cleared)
-        ibmsg_increment_credit(connection);
+        ibmsg_post_increment_credit(connection);
     }
     if(connection->status == IBMSG_CONNECTED)
         post_receive(connection);
@@ -263,7 +259,6 @@ static int
 process_send_socket_recv_completion(ibmsg_socket* connection)
 {
     struct ibv_wc wc;
-    LOG("recv connection cmid: 0x%llx", (long long unsigned)connection->cmid);
     int n_completions = rdma_get_recv_comp(connection->cmid, &wc);
     if(n_completions == -1)
     {
@@ -272,10 +267,7 @@ process_send_socket_recv_completion(ibmsg_socket* connection)
         return IBMSG_FETCH_EVENT_FAILED;
     }
 
-    LOG("freeing send socket recv buffer");
-    ibmsg_free_msg(&connection->recv_buffer);
-
-    // CREDIT: increment credit on receve end
+    ibmsg_free_msg(&connection->flow_control_buffer);
     connection->credit++;
     LOG("send credit raised to %d", connection->credit);
 
@@ -319,9 +311,8 @@ ibmsg_dispatch_event_loop(ibmsg_event_loop* event_loop)
             if(connection->socket_type == IBMSG_SEND_SOCKET)
             {
                 if((result = process_send_socket_send_completion((ibmsg_socket*)data->ptr)))
-                    return result; 
+                    return result;
             }
-            /* here we need another case for IBMSG_RECV_SOCKET */
             else if (connection->socket_type == IBMSG_RECV_SOCKET)
             {
                 if ((result = process_recv_socket_send_completion(
@@ -336,7 +327,6 @@ ibmsg_dispatch_event_loop(ibmsg_event_loop* event_loop)
                 if((result = process_recv_socket_recv_completion(event_loop, (ibmsg_socket*)data->ptr)))
                     return result;
             }
-            /* here we need another case for IBMSG_SEND_SOCKET */
             else if (connection->socket_type == IBMSG_SEND_SOCKET)
             {
                 if ((result = process_send_socket_recv_completion(
@@ -350,15 +340,17 @@ ibmsg_dispatch_event_loop(ibmsg_event_loop* event_loop)
     return IBMSG_OK;
 }
 
-int ibmsg_increment_credit(ibmsg_socket* connection)
+int ibmsg_post_increment_credit(ibmsg_socket* connection)
 {
-    //ibmsg_buffer* recv_msg = &connection->recv_buffer;
-    //if(ibmsg_alloc_msg(recv_msg, connection, sizeof(int)) != IBMSG_OK)
-    //{
-    //    LOG("could not allocate memory for credit update");
-    //    connection->status = IBMSG_ERROR;
-    //}
-    CHECK_CALL( rdma_post_send(connection->cmid, NULL, NULL, 0, NULL, 0),
+    ibmsg_buffer* flow_ctl_msg = &connection->flow_control_buffer;
+    if(ibmsg_alloc_msg(flow_ctl_msg, connection, sizeof(int)) != IBMSG_OK)
+    {
+       LOG("could not allocate memory for credit update");
+       connection->status = IBMSG_ERROR;
+    }
+    CHECK_CALL( rdma_post_send(
+                    connection->cmid, flow_ctl_msg, flow_ctl_msg->data,
+                    sizeof(int), flow_ctl_msg->mr, 0),
                 IBMSG_INCREMENT_CREDIT_FAILED);
     connection->credit++;
     LOG("recv credit incremented to %d", connection->credit++);
