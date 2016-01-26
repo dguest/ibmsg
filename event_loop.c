@@ -369,7 +369,7 @@ int ibmsg_post_send_credit(ibmsg_socket* connection, int credit)
     int rc = ibmsg_alloc_msg(msg, connection, sizeof(credit));
     if (rc) return rc;
 
-    *((int*)msg->data) = credit;
+    *(int*)msg->data = credit;
 
     // post credit
     CHECK_CALL( rdma_post_send(
