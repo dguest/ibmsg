@@ -26,8 +26,8 @@ message_received(ibmsg_socket* connection, ibmsg_buffer* msg)
 {
 	printf("message received\n");
 	ibmsg_free_msg(msg);
-
-  ibmsg_post_credit(connection);
+  connection->credit++;
+  ibmsg_post_send_credit(connection, connection->credit);
 }
 
 

@@ -56,7 +56,9 @@ ibmsg_connect(ibmsg_event_loop* event_loop, ibmsg_socket* connection, char* ip, 
     char service[16];
     snprintf(service, 16, "%d", port);
 
-    connection->credit = IBMSG_MAX_CREDIT;
+    // set the initial credit to zero, wait for the server to send the
+    // actual credit
+    connection->credit = 0;
 
     connection->status = IBMSG_UNCONNECTED;
     connection->socket_type = IBMSG_SEND_SOCKET;
@@ -123,24 +125,27 @@ ibmsg_post_send(ibmsg_socket* connection, ibmsg_buffer* msg)
         return IBMSG_INSUFFICIENT_CREDIT;
     }
 
-    // post receve for the credit
-    ibmsg_buffer* recv_msg = &connection->flow_control_buffer;
-    // decrement the credit count
     // TODO: make this operation atomic
     connection->credit--;
     LOG("send credit lowered to %d", connection->credit);
-    if(ibmsg_alloc_msg(recv_msg, connection, sizeof(int)) != IBMSG_OK)
-    {
-        LOG("could not allocate memory for credit update");
-        connection->status = IBMSG_ERROR;
-    }
-    CHECK_CALL(
-      rdma_post_recv(connection->cmid, recv_msg, recv_msg->data, sizeof(int),
-                     recv_msg->mr),
-      IBMSG_POST_SEND_FAILED );
+    int rc = ibmsg_post_recv_credit(connection);
+    if (rc) return rc;
 
     CHECK_CALL( rdma_post_send(connection->cmid, msg /* wrid */, msg->data, msg->size, msg->mr, 0), IBMSG_POST_SEND_FAILED );
 
+    return IBMSG_OK;
+}
+
+int
+ibmsg_post_recv_credit(ibmsg_socket* connection)
+{
+    const int size = sizeof(connection->credit);
+    ibmsg_buffer* msg = &connection->flow_control_buffer;
+    int rc = ibmsg_alloc_msg(msg, connection, size);
+    if (rc) return rc;
+    CHECK_CALL(rdma_post_recv(
+                   connection->cmid, msg, msg->data, size, msg->mr),
+               IBMSG_POST_SEND_FAILED );
     return IBMSG_OK;
 }
 
@@ -181,8 +186,8 @@ ibmsg_accept(ibmsg_connection_request* request, ibmsg_socket* connection)
     connection->cmid->context = connection;
     connection->socket_type = IBMSG_RECV_SOCKET;
 
-    //TODO: Send this credit count to the other side.
-    connection->credit = 2*IBMSG_MAX_CREDIT;
+    //TODO: make this credit come from the number of avalible buffers
+    connection->credit = IBMSG_MAX_CREDIT;
 
     return IBMSG_OK;
 }
