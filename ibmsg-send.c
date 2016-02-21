@@ -68,11 +68,6 @@ main(int argc, char** argv)
       fprintf(stderr, APPLICATION_NAME": error: could not send message\n");
       exit(EXIT_FAILURE);
     }
-    if(ibmsg_post_send(&connection, &msg))
-    {
-      fprintf(stderr, APPLICATION_NAME": error: could not send message\n");
-      exit(EXIT_FAILURE);
-    }
 
     while(msg.status != IBMSG_SENT) {
       fprintf(stdout, APPLICATION_NAME": wait\n");
