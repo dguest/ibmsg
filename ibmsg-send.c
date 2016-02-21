@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include "ibmsg.h"
 
 #define APPLICATION_NAME "ibmsg-rdma-send"
@@ -47,33 +48,48 @@ main(int argc, char** argv)
 		}
 	}
 
-
+  for (int iii = 0; iii < 10; iii++) {
 	/* Data transfers */
-	ibmsg_buffer msg;
-	if(ibmsg_alloc_msg(&msg, &connection, MSGSIZE))
-	{
-		fprintf(stderr, APPLICATION_NAME": error: could not allocate message memory\n");
-		exit(EXIT_FAILURE);
-	}
+		fprintf(stdout, APPLICATION_NAME": transfer %i\n", iii);
+		fprintf(stdout, APPLICATION_NAME": sleep\n");
+    sleep(1);
 
-	if(ibmsg_post_send(&connection, &msg))
-	{
-		fprintf(stderr, APPLICATION_NAME": error: could not send message\n");
-		exit(EXIT_FAILURE);
-	}
+    ibmsg_buffer msg;
+		fprintf(stdout, APPLICATION_NAME": alloc\n");
+    if(ibmsg_alloc_msg(&msg, &connection, MSGSIZE))
+    {
+      fprintf(stderr, APPLICATION_NAME": error: could not allocate message memory\n");
+      exit(EXIT_FAILURE);
+    }
 
-	while(msg.status != IBMSG_SENT)
-		if(ibmsg_dispatch_event_loop(&event_loop))
-		{
-			fprintf(stderr, APPLICATION_NAME": error: something went wrong while working in the event loop\n");
-			exit(EXIT_FAILURE);
-		}
+		fprintf(stdout, APPLICATION_NAME": post\n");
+    if(ibmsg_post_send(&connection, &msg))
+    {
+      fprintf(stderr, APPLICATION_NAME": error: could not send message\n");
+      exit(EXIT_FAILURE);
+    }
+    if(ibmsg_post_send(&connection, &msg))
+    {
+      fprintf(stderr, APPLICATION_NAME": error: could not send message\n");
+      exit(EXIT_FAILURE);
+    }
 
-	if(ibmsg_free_msg(&msg))
-	{
-		fprintf(stderr, APPLICATION_NAME": error: could not free memory\n");
-	}
+    while(msg.status != IBMSG_SENT) {
+      fprintf(stdout, APPLICATION_NAME": wait\n");
 
+      if(ibmsg_dispatch_event_loop(&event_loop))
+      {
+        fprintf(stderr, APPLICATION_NAME": error: something went wrong while working in the event loop\n");
+        exit(EXIT_FAILURE);
+      }
+    }
+
+    fprintf(stdout, APPLICATION_NAME": free\n");
+    if(ibmsg_free_msg(&msg))
+    {
+      fprintf(stderr, APPLICATION_NAME": error: could not free memory\n");
+    }
+  }
 
 	/* Disconnect */
 	if(ibmsg_disconnect(&connection))

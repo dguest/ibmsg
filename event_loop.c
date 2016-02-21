@@ -82,7 +82,7 @@ post_receive(ibmsg_socket* connection)
     }
     LOG( "RECV: WRID 0x%llx", (long long unsigned)msg );
     rdma_post_recv(connection->cmid, msg, msg->data, msg->size, msg->mr);
-    LOG( "Message receive posted" );
+    LOG( "Message receive posted on connection 0x%lx", connection );
 }
 
 
@@ -158,7 +158,9 @@ process_rdma_event(ibmsg_event_loop* event_loop, struct rdma_cm_event* event)
                 connection->status = IBMSG_ERROR;
                 free_connection(connection);
             }
-            post_receive(connection);
+            if (connection->socket_type == IBMSG_RECV_SOCKET) {
+              post_receive(connection);
+            }
             rdma_ack_cm_event (event);
             connection->status = IBMSG_CONNECTED;
             if(event_loop->connection_established)
@@ -225,8 +227,9 @@ process_recv_socket_recv_completion(ibmsg_event_loop* event_loop, ibmsg_socket* 
         if(ibmsg_free_msg(msg))
             return IBMSG_FREE_BUFFER_FAILED;
     }
-    if(connection->status == IBMSG_CONNECTED)
-        post_receive(connection);
+    if(connection->status == IBMSG_CONNECTED){
+       post_receive(connection);
+    }
     return 0;
 }
 
