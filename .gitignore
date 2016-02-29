@@ -4,3 +4,8 @@ lsdev
 ibmsg-send
 ibmsg-recv
 
+# scratch pad for commit messages
+commit.txt
+
+# AFS leaves strange files around
+.__afs*
