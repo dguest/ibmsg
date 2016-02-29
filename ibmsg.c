@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/epoll.h>
+#include <sys/time.h>
 #include <rdma/rdma_verbs.h>
 
 #include "ibmsg.h"
@@ -34,6 +35,8 @@ ibmsg_init_event_loop(ibmsg_event_loop* event_loop)
     event_loop->connection_established = NULL;
     event_loop->connection_request = NULL;
     event_loop->message_received = NULL;
+
+    event_loop->n_events = 0;
 
     return IBMSG_OK;
 }
@@ -115,7 +118,13 @@ int
 ibmsg_post_send(ibmsg_socket* connection, ibmsg_buffer* msg)
 {
     CHECK_CALL( rdma_post_send(connection->cmid, msg /* wrid */, msg->data, msg->size, msg->mr, 0), IBMSG_POST_SEND_FAILED );
+
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    LOG( "Message send posted on connection 0x%lx at %li.%li", (size_t)connection, tv.tv_sec, tv.tv_usec );
+
     return IBMSG_OK;
+
 }
 
 
@@ -133,6 +142,7 @@ ibmsg_listen(ibmsg_event_loop* event_loop, ibmsg_socket* socket, char* ip, short
     CHECK_CALL( rdma_create_id (event_loop->event_channel, &socket->cmid, NULL, RDMA_PS_TCP), IBMSG_CREATE_ID_FAILED );
     CHECK_CALL( rdma_bind_addr (socket->cmid, (struct sockaddr*)&src_addr), IBMSG_BIND_FAILED );
     CHECK_CALL( rdma_listen (socket->cmid, max_connections), IBMSG_LISTEN_FAILED );
+    event_loop->n_events = 0;
 
     return IBMSG_OK;
 }

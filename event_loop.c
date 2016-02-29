@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <sys/epoll.h>
+#include <sys/time.h>
 #include <infiniband/verbs.h>
 #include <rdma/rdma_verbs.h>
 #include "ibmsg.h"
@@ -81,8 +82,13 @@ post_receive(ibmsg_socket* connection)
         connection->status = IBMSG_ERROR;
     }
     LOG( "RECV: WRID 0x%llx", (long long unsigned)msg );
-    rdma_post_recv(connection->cmid, msg, msg->data, msg->size, msg->mr);
-    LOG( "Message receive posted on connection 0x%lx", connection );
+    LOG("posted on 0x%llx", (long long unsigned)msg->data);
+    if(rdma_post_recv(connection->cmid, msg, msg->data, msg->size, msg->mr)) {
+      LOG("ERRORRS");
+    }
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    LOG( "Message receve posted on connection 0x%lx at %li.%li", (size_t)connection, tv.tv_sec, tv.tv_usec );
 }
 
 
@@ -246,8 +252,9 @@ ibmsg_dispatch_event_loop(ibmsg_event_loop* event_loop)
             return IBMSG_EPOLL_WAIT_FAILED;
         }
     } while(nfds == 0);
+    event_loop->n_events += nfds;
 
-    LOG("Found %d event(s)", nfds);
+    LOG("Found %d event(s), total %d", nfds, event_loop->n_events);
     struct rdma_cm_event *cm_event;
     struct _ibmsg_event_description* data;
     ibmsg_socket* connection;

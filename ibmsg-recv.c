@@ -25,7 +25,7 @@ void
 message_received(ibmsg_socket* connection, ibmsg_buffer* msg)
 {
 	printf("message received\n");
-	ibmsg_free_msg(msg);
+	if(ibmsg_free_msg(msg)) printf("error!\n");
 }
 
 

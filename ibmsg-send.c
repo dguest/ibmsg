@@ -1,7 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <rdma/rdma_verbs.h>
 #include "ibmsg.h"
+#include <string.h>
 
 #define APPLICATION_NAME "ibmsg-rdma-send"
 #define MSGSIZE (4096)
@@ -70,13 +72,15 @@ main(int argc, char** argv)
     }
 
     while(msg.status != IBMSG_SENT) {
-      fprintf(stdout, APPLICATION_NAME": wait\n");
+      fprintf(stdout, APPLICATION_NAME": wait in status %i\n", msg.status);
 
       if(ibmsg_dispatch_event_loop(&event_loop))
       {
         fprintf(stderr, APPLICATION_NAME": error: something went wrong while working in the event loop\n");
         exit(EXIT_FAILURE);
       }
+      /* printf(APPLICATION_NAME": msg status %i, ncomp %i\n", msg.status, n_comp) */;
+      printf(APPLICATION_NAME": msg status %i\n", msg.status);
     }
 
     fprintf(stdout, APPLICATION_NAME": free\n");

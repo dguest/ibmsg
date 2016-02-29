@@ -91,6 +91,7 @@ typedef struct
     void (*message_received)(ibmsg_socket*, ibmsg_buffer*);
 
     struct _ibmsg_event_description event_description;
+    int n_events;
 } ibmsg_event_loop;
 
 
